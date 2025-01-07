@@ -51,6 +51,6 @@ if __name__ == "__main__":
     print("Entraînement terminé.")
 
     # Sauvegarde du modèle entraîné
-    model_path = "models/bayesian_model.pth"
+    model_path = "models/bayesian_modelPAGE.pth"
     bayesian_model.save_model(model_path)
     print(f"Modèle sauvegardé dans : {model_path}")

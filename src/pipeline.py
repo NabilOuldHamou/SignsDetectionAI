@@ -87,7 +87,7 @@ class ObjectDetectionPipeline:
             cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv2.putText(annotated_image, str(predicted_class), (x, y - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 0), 2)
-        annotated_output_path = os.path.join(self.output_dir, "annotated_image.jpg")
+        annotated_output_path = os.path.join(self.output_dir, "annotated_page.jpg")
         cv2.imwrite(annotated_output_path, annotated_image)
 
         # Sauvegarder les classes et leurs occurrences
