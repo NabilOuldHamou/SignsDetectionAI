@@ -12,6 +12,7 @@ class BayesianClassifier:
         self.feature_variances = {}
         self.class_priors = {}
         self.classes = []
+        self.mode = None  # Défini par le main.py ("plan" ou "page")
 
         # Initialize HOG descriptor with standard parameters
         self.hog = cv2.HOGDescriptor(
@@ -22,61 +23,51 @@ class BayesianClassifier:
             _nbins=9
         )
 
+    def set_mode(self, mode):
+        """
+        Configure le mode d'analyse (plan ou page) et ajuste les classes autorisées.
+        """
+        self.mode = mode
+        if mode == "plan":
+            self.classes = ['Figure1', 'Figure2', 'Figure3', 'Figure4', 'Figure5', 'Figure6']
+        elif mode == "page":
+            self.classes = ['2', 'd', 'I', 'n', 'o', 'u']
+        else:
+            raise ValueError(f"Mode inconnu : {mode}")
+
     def extract_features(self, image):
+        """
+        Extrait des caractéristiques d'une image (via HOG et normalisation).
+        """
         try:
-            # Convert image to grayscale
             if len(image.shape) == 3 and image.shape[2] == 3:
                 gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             else:
                 gray_image = image
 
-            # Apply adaptive thresholding
-            binary_image = cv2.adaptiveThreshold(
-                gray_image, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 2
-            )
+            resized_image = cv2.resize(gray_image, (28, 28))
+            hog_features = self.hog.compute(resized_image)
 
-            # Find contours
-            contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            if not contours:
-                print("No contours found.")
-                return np.array([])
-
-            features = []
-            for contour in contours:
-                if cv2.contourArea(contour) < 22:
-                    continue
-
-                x, y, w, h = cv2.boundingRect(contour)
-                letter_image = gray_image[y:y + h, x:x + w]
-                letter_image = cv2.resize(letter_image, (28, 28))
-
-                # Compute HOG features
-                hog_features = self.hog.compute(letter_image)
-                features.append(hog_features.flatten())
-
-            features = np.array(features)
-            if features.size == 0:
-                print("No features extracted.")
-                return np.array([])
-
-            norms = np.linalg.norm(features, axis=1, keepdims=True)
-            features = features / np.where(norms > 1e-6, norms, 1)
-
-            return features
+            features = hog_features.flatten()
+            norm = np.linalg.norm(features)
+            return features / norm if norm > 1e-6 else features
         except Exception as e:
             print(f"Error in extract_features: {e}")
             return np.array([])
 
     def train(self, dataset_path):
+        """
+        Entraîne le modèle bayésien sur un dataset structuré en sous-dossiers par classe.
+        """
         class_features = defaultdict(list)
         total_images = 0
 
         for class_name in os.listdir(dataset_path):
+            if class_name not in self.classes:
+                continue
+
             class_folder_path = os.path.join(dataset_path, class_name)
             if os.path.isdir(class_folder_path):
-                if class_name not in self.classes:
-                    self.classes.append(class_name)
-
                 for img_name in os.listdir(class_folder_path):
                     img_path = os.path.join(class_folder_path, img_name)
                     if os.path.isfile(img_path):
@@ -85,11 +76,8 @@ class BayesianClassifier:
                             if image is not None:
                                 features = self.extract_features(image)
                                 if features.size > 0:
-                                    for feature in features:
-                                        class_features[class_name].append(feature)
+                                    class_features[class_name].append(features)
                                     total_images += 1
-                                else:
-                                    print(f"No features extracted for {img_path}")
                             else:
                                 print(f"Failed to load image: {img_path}")
                         except Exception as e:
@@ -105,6 +93,9 @@ class BayesianClassifier:
         print("Training completed for classes:", self.classes)
 
     def save_model(self, model_path):
+        """
+        Sauvegarde le modèle entraîné dans un fichier.
+        """
         model_data = {
             "feature_means": self.feature_means,
             "feature_variances": self.feature_variances,
@@ -117,8 +108,11 @@ class BayesianClassifier:
         print(f"Model saved to {model_path}")
 
     def load_model(self, model_path):
+        """
+        Charge un modèle existant depuis un fichier.
+        """
         if os.path.exists(model_path):
-            model_data = torch.load(model_path, weights_only=False)
+            model_data = torch.load(model_path)
             self.feature_means = model_data["feature_means"]
             self.feature_variances = model_data["feature_variances"]
             self.class_priors = model_data["class_priors"]
@@ -127,7 +121,10 @@ class BayesianClassifier:
         else:
             print(f"No model found at {model_path}.")
 
-    def predict(self, image):
+    def predict(self, image, threshold=-65000):
+        """
+        Prédit la classe d'une image en utilisant le modèle bayésien.
+        """
         try:
             features = self.extract_features(image)
             if features.size == 0:
@@ -144,12 +141,21 @@ class BayesianClassifier:
                 posterior = likelihood + np.log(prior)
                 posteriors[class_name] = posterior
 
-            return max(posteriors, key=posteriors.get)
+            max_class = max(posteriors, key=posteriors.get)
+            max_posterior = posteriors[max_class]
+
+            print(f"Class: {max_class}, Posterior: {max_posterior}")
+            if max_posterior < threshold:
+                return None
+            return max_class
         except Exception as e:
             print(f"Error in prediction: {e}")
             return None
 
     def visualize(self):
+        """
+        Visualise les moyennes des caractéristiques par classe.
+        """
         if not self.classes:
             print("No classes to visualize.")
             return
