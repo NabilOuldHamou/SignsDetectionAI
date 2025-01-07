@@ -1,31 +1,55 @@
-import time
-from src.classifiers.bayesian import BayesianClassifier
+import os
+import cv2
 from src.pipeline import ObjectDetectionPipeline
+from src.classifiers.bayesian import BayesianClassifier
 
 if __name__ == "__main__":
-    # Chemin de l'image à traiter
-    image_path = "data/page.png"
-
-    # Initialisation du pipeline avec le chemin de l'image
-    pipeline = ObjectDetectionPipeline(image_path)
-
-    # Initialisation et chargement du modèle Bayésien
-    bayesian_model = BayesianClassifier()
+    # Chemin vers le modèle entraîné
     model_path = "models/bayesian_model.pth"
-    pipeline.load_model(model_path, bayesian_model)
+
+    # Chargement du modèle bayésien
+    print(f"Chargement du modèle bayésien depuis {model_path}")
+    bayesian_model = BayesianClassifier()
+    try:
+        bayesian_model.load_model(model_path)
+        print(f"Modèle bayésien chargé depuis {model_path}")
+    except Exception as e:
+        print(f"Erreur lors du chargement du modèle : {e}")
+        exit(1)
+
+    # Chemin de l'image de test
+    image_path = "data/page.png"
+    if not os.path.exists(image_path):
+        print(f"L'image de test {image_path} n'existe pas.")
+        exit(1)
+
+    # Initialisation du dossier de sortie
+    output_dir = "output"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Initialisation de la pipeline
+    print("Initialisation de la pipeline...")
+    pipeline = ObjectDetectionPipeline(image_path=image_path, model=bayesian_model, output_dir=output_dir)
 
     # Chargement de l'image
-    pipeline.load_image()
+    print("Chargement de l'image...")
+    try:
+        pipeline.load_image()
+    except FileNotFoundError as e:
+        print(e)
+        exit(1)
 
-    # Mesure du temps d'exécution pour la détection et classification
-    start_time = time.time()
-    class_counts, detected_objects = pipeline.detect_and_classify_objects()
-    end_time = time.time()
+    # Détection et classification des objets
+    print("Détection et classification des objets...")
+    try:
+        class_counts, detected_objects = pipeline.detect_and_classify_objects()
+    except Exception as e:
+        print(f"Erreur lors de la détection/classification : {e}")
+        exit(1)
 
-    # Résultats
-    print(f"Temps d'exécution: {end_time - start_time:.2f} secondes")
-    print("Comptage des classes :", class_counts)
-    print("Nombre d'objets détectés :", len(detected_objects))
-
-    # Affichage des résultats
+    # Sauvegarde et affichage des résultats
+    print("Sauvegarde et affichage des résultats...")
     pipeline.display_results(class_counts, detected_objects)
+
+    print(f"Les résultats ont été sauvegardés dans le dossier : {output_dir}")

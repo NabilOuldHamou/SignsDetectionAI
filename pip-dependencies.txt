@@ -1,1 +1,6 @@
-opencv-python pytorch tensorflow numpy pandas matplotlib
+opencv-python
+torch
+tensorflow
+numpy
+pandas
+matplotlib
