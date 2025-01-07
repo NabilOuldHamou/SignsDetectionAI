@@ -1,25 +1,30 @@
 import os
+import argparse  # Ajouté pour les arguments
 from collections import defaultdict
 import numpy as np
 import cv2
-
 from src.classifiers.bayesian import BayesianClassifier
 
 if __name__ == "__main__":
-    # Chemin vers le dataset d'entraînement
-    dataset_path = "data/catalogue"
+    # Analyse des arguments
+    parser = argparse.ArgumentParser(description="Train Bayesian model.")
+    parser.add_argument("--mode", type=str, choices=["page", "plan"], default="page", help="Mode de fonctionnement : 'page' ou 'plan'.")
+    args = parser.parse_args()
+
+    # Configuration en fonction du mode
+    mode = args.mode
+    dataset_path = f"data/catalogue{'' if mode == 'page' else 'Symbol'}"
+    allowed_classes = ['Figure1', 'Figure2', 'Figure3', 'Figure4', 'Figure5', 'Figure6'] if mode == "plan" else ['2', 'd', 'I', 'n', 'o', 'u']
+    model_path = f"models/bayesian_model{mode.upper()}.pth"
 
     # Initialisation du classifieur Bayésien
-    bayesian_model = BayesianClassifier()
+    bayesian_model = BayesianClassifier(mode=mode)
 
     print("Début de l'entraînement...")
 
     # Dictionnaire pour stocker les caractéristiques par classe
     class_features = defaultdict(list)
     total_images = 0
-
-    # Liste des classes autorisées
-    allowed_classes = ['2', 'd', 'I', 'n', 'o', 'u']  # Classes spécifiques au projet
 
     # Parcours des classes dans le dataset
     for class_name in os.listdir(dataset_path):
@@ -57,6 +62,5 @@ if __name__ == "__main__":
     print("Entraînement terminé.")
 
     # Sauvegarde du modèle entraîné
-    model_path = "models/bayesian_modelPAGE.pth"
     bayesian_model.save_model(model_path)
     print(f"Modèle sauvegardé dans : {model_path}")

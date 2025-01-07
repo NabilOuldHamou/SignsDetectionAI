@@ -7,11 +7,17 @@ import matplotlib.pyplot as plt
 
 
 class BayesianClassifier:
-    def __init__(self):
+    def __init__(self, mode="page"):
         self.feature_means = {}
         self.feature_variances = {}
         self.class_priors = {}
         self.classes = []
+
+        self.allowed_classes = (
+            ['Figure1', 'Figure2', 'Figure3', 'Figure4', 'Figure5', 'Figure6']
+            if mode == "plan"
+            else ['2', 'd', 'I', 'n', 'o', 'u']
+        )
 
         # Initialize HOG descriptor with standard parameters
         self.hog = cv2.HOGDescriptor(
@@ -19,31 +25,33 @@ class BayesianClassifier:
             _blockSize=(8, 8),
             _blockStride=(4, 4),
             _cellSize=(8, 8),
-            _nbins=9
+            _nbins=9,
         )
 
     def extract_features(self, image):
         try:
-            # Convert image to grayscale
+            # Convert to grayscale if image is RGB
             if len(image.shape) == 3 and image.shape[2] == 3:
                 gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             else:
                 gray_image = image
 
-            # Apply adaptive thresholding for better segmentation
+            # Apply adaptive thresholding for segmentation
             binary_image = cv2.adaptiveThreshold(
                 gray_image, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 11, 2
             )
 
             # Find contours
-            contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(
+                binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
             if not contours:
                 print("No contours found.")
                 return np.array([])
 
             features = []
             for contour in contours:
-                if cv2.contourArea(contour) < 20:  # Lowered area threshold
+                if cv2.contourArea(contour) < 20:  # Filter small areas
                     continue
 
                 x, y, w, h = cv2.boundingRect(contour)
@@ -59,7 +67,7 @@ class BayesianClassifier:
                 print("No features extracted.")
                 return np.array([])
 
-            # Normalize features for better consistency
+            # Normalize features
             norms = np.linalg.norm(features, axis=1, keepdims=True)
             features = features / np.where(norms > 1e-6, norms, 1)
 
@@ -70,11 +78,10 @@ class BayesianClassifier:
 
     def train(self, dataset_path):
         class_features = defaultdict(list)
-        total_images = 0
+        total_samples = 0
 
-        allowed_classes = ['2', 'd', 'I', 'n', 'o', 'u']  # Modifiez selon vos besoins
         for class_name in os.listdir(dataset_path):
-            if class_name not in allowed_classes:
+            if class_name not in self.allowed_classes:
                 continue
 
             class_folder_path = os.path.join(dataset_path, class_name)
@@ -85,27 +92,25 @@ class BayesianClassifier:
                 for img_name in os.listdir(class_folder_path):
                     img_path = os.path.join(class_folder_path, img_name)
                     if os.path.isfile(img_path):
-                        try:
-                            image = cv2.imread(img_path)
-                            if image is not None:
-                                features = self.extract_features(image)
-                                if features.size > 0:
-                                    for feature in features:
-                                        class_features[class_name].append(feature)
-                                    total_images += 1
-                                else:
-                                    print(f"No features extracted for {img_path}")
+                        image = cv2.imread(img_path)
+                        if image is not None:
+                            features = self.extract_features(image)
+                            if features.size > 0:
+                                for feature in features:
+                                    class_features[class_name].append(feature)
+                                total_samples += len(features)
                             else:
-                                print(f"Failed to load image: {img_path}")
-                        except Exception as e:
-                            print(f"Error processing {img_path}: {e}")
+                                print(f"No features extracted for {img_path}")
+                        else:
+                            print(f"Failed to load image: {img_path}")
 
+        # Compute means, variances, and priors
         for class_name in self.classes:
             if class_name in class_features:
                 features = np.array(class_features[class_name])
                 self.feature_means[class_name] = np.mean(features, axis=0)
-                self.feature_variances[class_name] = np.var(features, axis=0) + 1e-6
-                self.class_priors[class_name] = len(features) / total_images
+                self.feature_variances[class_name] = np.var(features, axis=0) + 1e-6  # Avoid zero variance
+                self.class_priors[class_name] = len(features) / total_samples
 
         print("Training completed for classes:", self.classes)
 
@@ -114,16 +119,15 @@ class BayesianClassifier:
             "feature_means": self.feature_means,
             "feature_variances": self.feature_variances,
             "class_priors": self.class_priors,
-            "classes": self.classes
+            "classes": self.classes,
         }
-        if not os.path.exists(os.path.dirname(model_path)):
-            os.makedirs(os.path.dirname(model_path))
+        os.makedirs(os.path.dirname(model_path), exist_ok=True)
         torch.save(model_data, model_path)
         print(f"Model saved to {model_path}")
 
     def load_model(self, model_path):
         if os.path.exists(model_path):
-            model_data = torch.load(model_path, weights_only=False)
+            model_data = torch.load(model_path)
             self.feature_means = model_data["feature_means"]
             self.feature_variances = model_data["feature_variances"]
             self.class_priors = model_data["class_priors"]
@@ -132,7 +136,7 @@ class BayesianClassifier:
         else:
             print(f"No model found at {model_path}.")
 
-    def predict(self, image, threshold=0.3):  # Lowered threshold
+    def predict(self, image, threshold=0.3):
         try:
             features = self.extract_features(image)
             if features.size == 0:
@@ -145,14 +149,17 @@ class BayesianClassifier:
                 variance = self.feature_variances[class_name]
                 prior = self.class_priors[class_name]
 
-                likelihood = -0.5 * np.sum(((features - mean) ** 2) / variance + np.log(2 * np.pi * variance))
-                posterior = likelihood + np.log(prior)
-                posteriors[class_name] = posterior
+                # Compute log-likelihood
+                log_likelihood = -0.5 * np.sum(
+                    ((features - mean) ** 2) / variance + np.log(2 * np.pi * variance),
+                    axis=1,
+                )
+                posterior = log_likelihood + np.log(prior)
+                posteriors[class_name] = np.sum(posterior)
 
             max_class = max(posteriors, key=posteriors.get)
             max_posterior = posteriors[max_class]
 
-            print(f"Class: {max_class}, Posterior: {max_posterior}")  # Added debug info
             if max_posterior < threshold:
                 return None
             return max_class
