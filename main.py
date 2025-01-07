@@ -3,7 +3,7 @@ from src.pipeline import ObjectDetectionPipeline
 from src.classifiers.bayesian import BayesianClassifier
 
 # Définissez le mode d'analyse ici : "plan" ou "page"
-analysis_mode = "plan"
+analysis_mode = "page"
 
 if __name__ == "__main__":
     # Configuration basée sur le mode
@@ -52,8 +52,12 @@ if __name__ == "__main__":
     # Détection et classification des objets
     print("Détection et classification des objets...")
     try:
-        class_counts, detected_objects = pipeline.detect_and_classify_objects()
-        print("Classes détectées :", class_counts)
+        class_counts, detected_objects, total_objects, ignored_objects, identified_objects = pipeline.detect_and_classify_objects()
+        print(f"Classes détectées : {class_counts}")
+        print("Résumé des objets :")
+        print(f"- Objets totaux : {total_objects}")
+        print(f"- Objets identifiés : {identified_objects}")
+        print(f"- Objets ignorés : {ignored_objects}")
     except Exception as e:
         print(f"Erreur lors de la détection/classification : {e}")
         exit(1)

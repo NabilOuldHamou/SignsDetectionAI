@@ -64,7 +64,6 @@ class BayesianClassifier:
 
             features = np.array(features)
             if features.size == 0:
-                print("No features extracted.")
                 return np.array([])
 
             # Normalize features
@@ -140,7 +139,6 @@ class BayesianClassifier:
         try:
             features = self.extract_features(image)
             if features.size == 0:
-                print("Empty features, skipping prediction.")
                 return None
 
             posteriors = {}

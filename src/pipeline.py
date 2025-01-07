@@ -59,9 +59,15 @@ class ObjectDetectionPipeline:
 
         class_counts = defaultdict(int)
         detected_objects = []
+        total_objects = 0
+        ignored_objects = 0
+        identified_objects = 0
 
         for contour in contours:
+            total_objects += 1  # Compteur total des objets
+
             if cv2.contourArea(contour) < self.min_contour_area:
+                ignored_objects += 1
                 continue
 
             x, y, w, h = cv2.boundingRect(contour)
@@ -69,13 +75,14 @@ class ObjectDetectionPipeline:
 
             predicted_class = self.model.predict(letter_image, threshold=self.threshold)
             if predicted_class is None:
-                print("Object ignored due to low resemblance.")
+                ignored_objects += 1
                 continue
 
+            identified_objects += 1
             class_counts[predicted_class] += 1
             detected_objects.append((x, y, w, h, predicted_class))
 
-        return dict(sorted(class_counts.items())), detected_objects
+        return dict(sorted(class_counts.items())), detected_objects, total_objects, ignored_objects, identified_objects
 
     def save_results(self, class_counts, detected_objects):
         binary_output_path = os.path.join(self.output_dir, "binary_image.jpg")
