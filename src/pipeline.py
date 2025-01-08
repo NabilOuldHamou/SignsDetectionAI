@@ -1,8 +1,8 @@
+
 import cv2
 import os
 from matplotlib import pyplot as plt
 from collections import defaultdict
-
 
 class ObjectDetectionPipeline:
     def __init__(self, image_path, model=None, output_dir="output", mode="page", min_contour_area=20, binary_threshold=None):
@@ -13,28 +13,31 @@ class ObjectDetectionPipeline:
         self.output_dir = output_dir
         self.min_contour_area = min_contour_area
         self.binary_threshold = binary_threshold
-        self.mode = mode  # Default mode is "page"
+        self.mode = mode  # Le mode par défaut est "page"
         self.annotated_output_path = os.path.join(self.output_dir, f"annotated_{os.path.basename(image_path)}")
         self.threshold = -395000 if mode == "plan" else -65000
 
+        # Créez le dossier de sortie s'il n'existe pas
         if not os.path.exists(self.output_dir):
             os.makedirs(self.output_dir)
 
     def set_mode(self, mode):
-        """Set the detection mode (page or plan)."""
+        """Définir le mode de détection (page ou plan)."""
         if mode not in ["page", "plan"]:
-            raise ValueError("Mode must be 'page' or 'plan'.")
+            raise ValueError("Le mode doit être 'page' ou 'plan'.")
         self.mode = mode
         self.threshold = -395000 if mode == "plan" else -65000
-        print(f"Mode set to: {self.mode}, Threshold set to: {self.threshold}")
+        print(f"Mode défini à : {self.mode}, Seuil défini à : {self.threshold}")
 
     def load_image(self):
+        """Charger l'image à analyser."""
         self.image = cv2.imread(self.image_path)
         if self.image is None:
-            raise FileNotFoundError(f"Image {self.image_path} not found.")
+            raise FileNotFoundError(f"L'image {self.image_path} est introuvable.")
         return self.image
 
     def preprocess_image(self):
+        """Effectuer un prétraitement de l'image pour obtenir une version binaire."""
         channels = cv2.split(self.image)
         binary_images = []
 
@@ -51,8 +54,9 @@ class ObjectDetectionPipeline:
         return binary_image
 
     def detect_and_classify_objects(self):
+        """Détecter et classer les objets dans l'image."""
         if self.model is None:
-            raise ValueError("No classification model provided.")
+            raise ValueError("Aucun modèle de classification n'a été fourni.")
 
         self.binary_image = self.preprocess_image()
         contours, _ = cv2.findContours(self.binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -64,7 +68,7 @@ class ObjectDetectionPipeline:
         identified_objects = 0
 
         for contour in contours:
-            total_objects += 1  # Compteur total des objets
+            total_objects += 1  # Incrémenter le compteur total des objets
 
             if cv2.contourArea(contour) < self.min_contour_area:
                 ignored_objects += 1
@@ -85,6 +89,7 @@ class ObjectDetectionPipeline:
         return dict(sorted(class_counts.items())), detected_objects, total_objects, ignored_objects, identified_objects
 
     def save_results(self, class_counts, detected_objects):
+        """Sauvegarder les résultats de la détection dans des fichiers."""
         binary_output_path = os.path.join(self.output_dir, "binary_image.jpg")
         cv2.imwrite(binary_output_path, self.binary_image)
 
@@ -101,11 +106,12 @@ class ObjectDetectionPipeline:
                 f.write(f"{class_name}: {count}\n")
 
     def display_results(self, class_counts, detected_objects):
+        """Afficher les résultats sous forme graphique."""
         self.save_results(class_counts, detected_objects)
 
         plt.figure(figsize=(10, 5))
         plt.bar(class_counts.keys(), class_counts.values())
         plt.xlabel("Classes")
-        plt.ylabel("Object count")
-        plt.title("Detected Class Distribution")
+        plt.ylabel("Nombre d'objets")
+        plt.title("Répartition des classes détectées")
         plt.show()
