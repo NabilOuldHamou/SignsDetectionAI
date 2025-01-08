@@ -1,9 +1,10 @@
 import os
+import subprocess
 from src.pipeline import ObjectDetectionPipeline
 from src.classifiers.bayesian import BayesianClassifier
 
 # Définissez le mode d'analyse ici : "plan" ou "page"
-analysis_mode = "page"
+analysis_mode = "plan"
 
 if __name__ == "__main__":
     # Configuration basée sur le mode
@@ -13,6 +14,15 @@ if __name__ == "__main__":
     else:
         model_path = "models/bayesian_modelPAGE.pth"
         image_path = "data/page.png"
+
+    # Exécuter le script train.py avec le mode sélectionné
+    print(f"Lancement de l'entraînement avec le mode {analysis_mode}...")
+    try:
+        subprocess.run(["python", "train.py", "--mode", analysis_mode], check=True)
+        print("Entraînement terminé.")
+    except subprocess.CalledProcessError as e:
+        print(f"Erreur lors de l'entraînement : {e}")
+        exit(1)
 
     # Chargement du modèle bayésien
     print(f"Chargement du modèle bayésien depuis {model_path}")
